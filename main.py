@@ -31,9 +31,6 @@ class Process(ABC):
 
     @abstractmethod
     def run(self) -> None:
-        # self.download()
-        # self.clean()
-        # self.store()
         pass
 
     def download(self, output_format: str) -> Response:
@@ -68,24 +65,25 @@ class ProcessCsv(Process):
     def run(self) -> None:
         csv = self.download("csv")
         cleaned = self.clean(csv.text)
-        self.store(cleaned, "result.csv")
+        self.store(cleaned, f"result_{self.layer}.csv")
 
-    def clean(self, data: str) -> str:
+    def clean(self, data: str) -> StringIO:
         csv.field_size_limit(sys.maxsize)
         output = StringIO()
         reader = csv.DictReader(StringIO(data))
-        writer = csv.DictWriter(output, fieldnames=reader.fieldnames)
+        writer = csv.DictWriter(output, fieldnames=[x for x in reader.fieldnames if x not in self.settings.UNWANTED_CSV_COLUMNS])
         writer.writeheader()
         for line in reader:
             for unwanted in self.settings.UNWANTED_CSV_COLUMNS:
                 if unwanted in line:
                     del line[unwanted]
             writer.writerow(line)
-        return str(output)
+        return output
 
-    def store(self, data: str, output_file: str) -> None:
-        with open(self.settings.OUTPUT_DIR / output_file) as f:
-            f.write(data)
+    def store(self, data: StringIO, output_file: str) -> None:
+        with open(self.settings.OUTPUT_DIR / output_file, 'w') as f:
+            data.seek(0)
+            f.write(data.read())
 
 
 
@@ -97,17 +95,17 @@ class ProcessJson(Process):
     def run(self):
         res = self.download("json")
         cleaned = self.clean(res.json())
-        self.store(cleaned, Path(self.settings.OUTPUT_DIR))
+        self.store(cleaned, f"result_{self.layer}.json")
 
     def clean(self, geojson: dict) -> dict:
         for features in geojson["features"]:
             for unwanted in self.settings.UNWANTED_JSON_COLUMNS:
-                features.pop(col, None)
+                features.pop(unwanted, None)
         return geojson["features"]
 
     def store(self, data: dict, output_file: str) -> None:
         with open(self.settings.OUTPUT_DIR / output_file, "w") as f:
-            json.dump(f, data)
+            json.dump(data, f)
 
 
 if __name__ == "__main__":

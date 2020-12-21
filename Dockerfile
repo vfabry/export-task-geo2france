@@ -1,10 +1,12 @@
 FROM python:3.9-slim
 
-USER 1234
-WORKDIR /app
-COPY --chown 1234:1234 requirements.txt /app
+RUN useradd -r -m worker
+USER worker
+WORKDIR /home/worker
+COPY --chown=worker requirements.txt .
 RUN pip install --user -r requirements.txt
+COPY --chown=worker . .
 
-CMD ["python3", "/app/main.py"]
+CMD ["python3", "main.py"]
 
 
